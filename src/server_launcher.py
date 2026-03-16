@@ -3,7 +3,8 @@ import logging
 import os
 import shlex
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import uvloop
 from vllm.entrypoints.openai.api_server import run_server
@@ -16,6 +17,7 @@ from vllm.utils.argparse_utils import FlexibleArgumentParser
 
 
 LOGGER = logging.getLogger("vllm_server.launcher")
+ENV_FILE = Path(__file__).with_name(".env")
 
 
 def env_flag(name: str, default: bool) -> bool:
@@ -30,48 +32,87 @@ def env_list(name: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def load_env_file(path: Path) -> None:
+    if not path.is_file():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        os.environ.setdefault(key, value.strip())
+
+
+load_env_file(ENV_FILE)
+
+
 @dataclass
 class ServiceSettings:
-    model: str = os.getenv("VLLM_MODEL", "Qwen/Qwen3-Coder-30B-A3B-Instruct")
-    served_model_name: str = os.getenv("VLLM_SERVED_MODEL_NAME", "qwen3-coder")
-    host: str = os.getenv("VLLM_HOST", "0.0.0.0")
-    port: int = int(os.getenv("VLLM_PORT", "8000"))
-    dtype: str = os.getenv("VLLM_DTYPE", "auto")
-    gpu_memory_utilization: float = float(
-        os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.92")
-    )
-    max_model_len: str | None = os.getenv("VLLM_MAX_MODEL_LEN")
-    max_num_seqs: str | None = os.getenv("VLLM_MAX_NUM_SEQS", "16")
-    max_num_batched_tokens: str | None = os.getenv(
-        "VLLM_MAX_NUM_BATCHED_TOKENS", "16384"
-    )
-    tensor_parallel_size: int = int(os.getenv("VLLM_TENSOR_PARALLEL_SIZE", "1"))
-    api_keys: list[str] = None
-    disable_uvicorn_access_log: bool = env_flag(
-        "VLLM_DISABLE_UVICORN_ACCESS_LOG", True
-    )
-    enable_request_id_headers: bool = env_flag(
-        "VLLM_ENABLE_REQUEST_ID_HEADERS", True
-    )
-    disable_fastapi_docs: bool = env_flag("VLLM_DISABLE_FASTAPI_DOCS", True)
-    trust_remote_code: bool = env_flag("VLLM_TRUST_REMOTE_CODE", False)
-    enable_log_requests: bool = env_flag("VLLM_ENABLE_LOG_REQUESTS", False)
-    uvicorn_log_level: str = os.getenv("VLLM_UVICORN_LOG_LEVEL", "info")
-    root_path: str | None = os.getenv("VLLM_ROOT_PATH")
-    allowed_origins: list[str] = None
-    allowed_methods: list[str] = None
-    allowed_headers: list[str] = None
-    ssl_keyfile: str | None = os.getenv("VLLM_SSL_KEYFILE")
-    ssl_certfile: str | None = os.getenv("VLLM_SSL_CERTFILE")
-    ssl_ca_certs: str | None = os.getenv("VLLM_SSL_CA_CERTS")
-    h11_max_header_count: int = int(os.getenv("VLLM_H11_MAX_HEADER_COUNT", "256"))
-    extra_args: list[str] = None
+    model: str = field(init=False)
+    served_model_name: str = field(init=False)
+    host: str = field(init=False)
+    port: int = field(init=False)
+    dtype: str = field(init=False)
+    gpu_memory_utilization: float = field(init=False)
+    max_model_len: str | None = field(init=False)
+    max_num_seqs: str | None = field(init=False)
+    max_num_batched_tokens: str | None = field(init=False)
+    tensor_parallel_size: int = field(init=False)
+    api_keys: list[str] = field(init=False)
+    disable_uvicorn_access_log: bool = field(init=False)
+    enable_request_id_headers: bool = field(init=False)
+    disable_fastapi_docs: bool = field(init=False)
+    trust_remote_code: bool = field(init=False)
+    enable_log_requests: bool = field(init=False)
+    uvicorn_log_level: str = field(init=False)
+    root_path: str | None = field(init=False)
+    allowed_origins: list[str] = field(init=False)
+    allowed_methods: list[str] = field(init=False)
+    allowed_headers: list[str] = field(init=False)
+    ssl_keyfile: str | None = field(init=False)
+    ssl_certfile: str | None = field(init=False)
+    ssl_ca_certs: str | None = field(init=False)
+    h11_max_header_count: int = field(init=False)
+    extra_args: list[str] = field(init=False)
 
     def __post_init__(self) -> None:
+        self.model = os.getenv("VLLM_MODEL", "Qwen/Qwen3-Coder-30B-A3B-Instruct")
+        self.served_model_name = os.getenv("VLLM_SERVED_MODEL_NAME", "qwen3-coder")
+        self.host = os.getenv("VLLM_HOST", "0.0.0.0")
+        self.port = int(os.getenv("VLLM_PORT", "8000"))
+        self.dtype = os.getenv("VLLM_DTYPE", "auto")
+        self.gpu_memory_utilization = float(
+            os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.92")
+        )
+        self.max_model_len = os.getenv("VLLM_MAX_MODEL_LEN")
+        self.max_num_seqs = os.getenv("VLLM_MAX_NUM_SEQS", "16")
+        self.max_num_batched_tokens = os.getenv(
+            "VLLM_MAX_NUM_BATCHED_TOKENS", "16384"
+        )
+        self.tensor_parallel_size = int(os.getenv("VLLM_TENSOR_PARALLEL_SIZE", "1"))
         self.api_keys = env_list("VLLM_API_KEYS")
+        self.disable_uvicorn_access_log = env_flag(
+            "VLLM_DISABLE_UVICORN_ACCESS_LOG", True
+        )
+        self.enable_request_id_headers = env_flag(
+            "VLLM_ENABLE_REQUEST_ID_HEADERS", True
+        )
+        self.disable_fastapi_docs = env_flag("VLLM_DISABLE_FASTAPI_DOCS", True)
+        self.trust_remote_code = env_flag("VLLM_TRUST_REMOTE_CODE", False)
+        self.enable_log_requests = env_flag("VLLM_ENABLE_LOG_REQUESTS", False)
+        self.uvicorn_log_level = os.getenv("VLLM_UVICORN_LOG_LEVEL", "info")
+        self.root_path = os.getenv("VLLM_ROOT_PATH")
         self.allowed_origins = env_list("VLLM_ALLOWED_ORIGINS") or ["*"]
         self.allowed_methods = env_list("VLLM_ALLOWED_METHODS") or ["*"]
         self.allowed_headers = env_list("VLLM_ALLOWED_HEADERS") or ["*"]
+        self.ssl_keyfile = os.getenv("VLLM_SSL_KEYFILE")
+        self.ssl_certfile = os.getenv("VLLM_SSL_CERTFILE")
+        self.ssl_ca_certs = os.getenv("VLLM_SSL_CA_CERTS")
+        self.h11_max_header_count = int(os.getenv("VLLM_H11_MAX_HEADER_COUNT", "256"))
         self.extra_args = shlex.split(os.getenv("VLLM_EXTRA_ARGS", ""))
 
     def to_cli_args(self) -> list[str]:
