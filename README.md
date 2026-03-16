@@ -1,94 +1,133 @@
-# vLLM Server Production Skeleton
+# LocalLLMService
 
-这个仓库现在提供一套适合裸机 GPU 服务器部署的基础骨架：
+适用于内部代码模型服务的 vLLM 生产骨架，当前默认目标模型为 `Qwen/Qwen3-Coder-30B-A3B-Instruct`。
 
-- 通过官方 `vllm.entrypoints.openai.api_server.run_server(args)` 启动，而不是手工拼 FastAPI app。
-- 通过环境变量管理模型、显存、水位、鉴权和模型别名。
-- 默认启用请求审计中间件，只记录请求次数和元数据，不落 prompt 明文。
-- 客户端默认走非流式调用，保留单独的流式方法。
+这套骨架包含：
+
+- 官方 vLLM OpenAI server 启动包装器。
+- 按请求数和耗时统计的结构化审计日志。
+- 默认非流式客户端示例。
+- Docker Compose 运行环境。
+- 5090 服务器的一键部署脚本。
+- 兼容 4090/5090 的参数模板。
 
 ## 目录
 
-- `server_launcher.py`: vLLM 官方启动入口包装器。
-- `audit_middleware.py`: 结构化请求审计日志。
-- `unified_client.py`: OpenAI 兼容客户端示例，默认非流式。
+- `server_launcher.py`: 读取环境变量并调用官方 `run_server(args)`。
+- `audit_middleware.py`: 输出单行 JSON 审计日志。
+- `unified_client.py`: OpenAI 兼容客户端示例。
+- `Dockerfile`: 服务镜像定义。
+- `docker-compose.yml`: 单机 GPU 部署编排文件。
 - `.env.example`: 通用环境变量模板。
-- `deploy/env.5090.example`: 5090 单卡参考配置。
-- `deploy/env.4090.example`: 4090 兼容骨架参考配置。
-- `deploy/systemd/vllm-server.service`: 裸机 systemd 服务模板。
+- `deploy/env.5090.compose.example`: 5090 的完整 Compose 模板。
+- `deploy/env.5090.example`: 5090 的参数覆盖模板。
+- `deploy/env.4090.example`: 4090 兼容参数模板。
+- `deploy/scripts/bootstrap_5090.sh`: Ubuntu + Docker + NVIDIA toolkit + Compose 一键部署脚本。
+- `deploy/systemd/vllm-server.service`: 裸机 Python 方式的 systemd 模板。
 
-## 快速开始
+## 运行方式
 
-1. 创建 Python 环境并安装依赖：
+### 方式一：Docker Compose
+
+1. 准备环境变量：
+
+```bash
+cp deploy/env.5090.compose.example .env
+```
+
+2. 先验配置：
+
+```bash
+docker compose config
+```
+
+3. 构建并启动：
+
+```bash
+docker compose up -d --build
+```
+
+4. 检查健康状态：
+
+```bash
+docker compose ps
+curl http://127.0.0.1:8000/health
+```
+
+### 方式二：本地 Python
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
-```
-
-2. 准备配置：
-
-```bash
 cp .env.example .env
-```
-
-如果目标是 5090，可以先参考 `deploy/env.5090.example`。
-
-3. 在上线前先做配置检查：
-
-```bash
 set -a && source .env && set +a
 python server_launcher.py --check-config
-python server_launcher.py --print-config
+python server_launcher.py
 ```
 
-4. 启动服务：
+### 方式三：5090 一键部署
+
+目标机建议为 Ubuntu 22.04/24.04，已安装 NVIDIA 驱动。
 
 ```bash
-set -a && source .env && set +a
-python server_launcher.py
+curl -fsSL https://raw.githubusercontent.com/harrisonyao/LocalLLMService/main/deploy/scripts/bootstrap_5090.sh | sudo bash
+```
+
+脚本默认会：
+
+- 安装 Docker Engine 和 Compose Plugin。
+- 安装 NVIDIA Container Toolkit。
+- 拉取或更新 `LocalLLMService` 仓库到 `/opt/LocalLLMService`。
+- 生成 `.env`。
+- 使用 `docker compose up -d --build` 拉起服务。
+
+可通过环境变量覆盖：
+
+```bash
+sudo REPO_URL=https://github.com/harrisonyao/LocalLLMService.git APP_DIR=/opt/LocalLLMService bash deploy/scripts/bootstrap_5090.sh
 ```
 
 ## 关键接口
 
-- `GET /health`: vLLM 引擎健康检查，不走 `/v1` 鉴权。
+- `GET /health`: 引擎健康检查。
 - `GET /metrics`: Prometheus 指标。
-- `GET /v1/models`: 查看当前对外暴露的模型名。
+- `GET /v1/models`: 当前对外暴露模型。
 - `POST /v1/chat/completions`: OpenAI 兼容聊天接口。
-
-## 鉴权
-
-如果设置 `VLLM_API_KEYS=key1,key2`，vLLM 会要求 `/v1/*` 请求携带 `Authorization: Bearer <key>`。
 
 ## 日志
 
-请求审计日志输出到 stdout/journald，格式为单行 JSON，例如：
+请求审计日志输出到 stdout/docker logs/journald，格式为单行 JSON：
 
 ```json
 {"client_ip":"10.0.0.8","content_length":"812","duration_ms":1532.44,"event":"llm_request","method":"POST","path":"/v1/chat/completions","request_id":"a1b2c3","status_code":200}
 ```
 
-默认只记录元数据，不记录 prompt。这样可以满足“知道有多少请求、每个请求耗时如何”的内部审计诉求。
+默认只记元数据，不记 prompt 明文。这样既能统计请求量，也便于排查慢请求。
 
-## 4090 与 5090 兼容建议
+## 鉴权
 
-- 代码骨架本身同时兼容 4090 和 5090，差异主要体现在 `.env` 参数。
-- `Qwen/Qwen3-Coder-30B-A3B-Instruct` 更适合 5090 这类显存更充裕的卡。
-- 4090 24GB 场景请优先选择量化版模型、减小 `VLLM_MAX_MODEL_LEN`，并降低并发参数。
-- 不要复用 macOS 本地环境到 Linux GPU 主机；需要在目标机器重新安装 CUDA 对应的 vLLM/PyTorch 环境。
-
-## systemd 部署
-
-把仓库放到目标机，例如 `/opt/vllm-server`，并准备：
+如果设置：
 
 ```bash
-cp deploy/systemd/vllm-server.service /etc/systemd/system/vllm-server.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now vllm-server
-sudo systemctl status vllm-server
+VLLM_API_KEYS=key1,key2
 ```
+
+则 `/v1/*` 请求需要：
+
+```text
+Authorization: Bearer <key>
+```
+
+`/health` 和 `/metrics` 不受 `/v1` 鉴权影响。
+
+## 4090 与 5090
+
+- 代码骨架同时兼容 4090 和 5090。
+- `Qwen/Qwen3-Coder-30B-A3B-Instruct` 更适合 5090。
+- 4090 24GB 场景请优先替换为量化版模型或更小模型，并降低 `VLLM_MAX_MODEL_LEN`、`VLLM_MAX_NUM_SEQS`。
+- 不要把 macOS 本地环境直接迁移到 Linux GPU 机；请在目标机重新构建镜像或重新安装依赖。
 
 ## 客户端示例
 
@@ -100,10 +139,15 @@ result = client.optimize_code("请优化这段 Python 代码")
 print(result)
 ```
 
-## 建议的上线前检查
+## 裸机 systemd
 
-- `python server_launcher.py --check-config`
+如果你不走 Docker，也可以使用 `deploy/systemd/vllm-server.service`。
+
+## 上线前检查
+
+- `docker compose config`
+- `docker compose ps`
 - `curl http://127.0.0.1:8000/health`
 - `curl http://127.0.0.1:8000/v1/models`
-- 使用真实请求打一次 `/v1/chat/completions`
-- 观察 `journalctl -u vllm-server -f` 中的单行 JSON 审计日志
+- 用真实请求打一次 `/v1/chat/completions`
+- `docker logs -f local-llm-service`
