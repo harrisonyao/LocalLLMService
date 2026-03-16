@@ -4,9 +4,10 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 
-COPY server_launcher.py audit_middleware.py unified_client.py README.md ./
+COPY src ./src
+COPY README.md requirements.txt ./
 COPY deploy ./deploy
 
 EXPOSE 8000
 
-CMD ["python", "server_launcher.py"]
+CMD ["python", "src/server_launcher.py"]

@@ -5,7 +5,8 @@ set -euo pipefail
 REPO_URL="${REPO_URL:-https://github.com/harrisonyao/LocalLLMService.git}"
 APP_DIR="${APP_DIR:-/opt/LocalLLMService}"
 BRANCH="${BRANCH:-main}"
-ENV_TEMPLATE="${ENV_TEMPLATE:-deploy/env.5090.compose.example}"
+ENV_TEMPLATE="${ENV_TEMPLATE:-src/env.5090.compose.example}"
+APP_ENV_FILE="${APP_ENV_FILE:-src/.env}"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Please run this script as root."
@@ -86,16 +87,16 @@ sync_repo() {
 prepare_env() {
   cd "${APP_DIR}"
 
-  if [[ ! -f ".env" ]]; then
-    cp "${ENV_TEMPLATE}" .env
-    echo "Created ${APP_DIR}/.env from ${ENV_TEMPLATE}"
+  if [[ ! -f "${APP_ENV_FILE}" ]]; then
+    cp "${ENV_TEMPLATE}" "${APP_ENV_FILE}"
+    echo "Created ${APP_DIR}/${APP_ENV_FILE} from ${ENV_TEMPLATE}"
     echo "Review .env before exposing the service outside your internal network."
   fi
 }
 
 start_service() {
   cd "${APP_DIR}"
-  docker compose up -d --build
+  docker compose --env-file "${APP_ENV_FILE}" up -d --build
 }
 
 print_summary() {
@@ -109,7 +110,7 @@ Branch:     ${BRANCH}
 
 Useful checks:
   cd ${APP_DIR}
-  docker compose ps
+  docker compose --env-file ${APP_ENV_FILE} ps
   docker logs -f local-llm-service
   curl http://127.0.0.1:8000/health
   nvidia-smi
