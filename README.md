@@ -18,6 +18,7 @@
 
 - `Dockerfile`
 - `docker-compose.yml`
+- `deploy/logrotate/local-llm-service`
 - `deploy/scripts/bootstrap_5090.sh`
 - `deploy/scripts/local_service.sh`
 - `deploy/systemd/vllm-server.service`
@@ -26,6 +27,8 @@
 
 - 自定义服务参数统一使用 `LLM_*` 前缀，避免和 vLLM 官方 `VLLM_*` 环境变量命名空间冲突。
 - 启动器仍兼容旧的 `VLLM_*` 变量名；如果检测到旧名字，会在启动早期自动转换到 `LLM_*`。
+- 如果模型已经下载完成，想避免启动阶段再请求 Hugging Face 或镜像站，最稳的方式是把 `LLM_MODEL` 直接设置为本地模型目录，而不是远端仓库名。
+- 如果你仍然使用 Hugging Face 仓库名，即使缓存里已经有模型文件，启动时仍可能为了仓库元数据或文件列表去访问远端服务。
 
 ## 运行方式
 
@@ -81,9 +84,27 @@ bash deploy/scripts/local_service.sh stop
 脚本会：
 
 - 自动读取 `src/.env`
+- 如果未显式设置，则默认导出 `HF_ENDPOINT=https://hf-mirror.com`
 - 默认使用 `venv/bin/python`，如果不存在则回退到 `python3`
 - 把 PID 文件写到 `.runtime/local-llm-service.pid`
 - 把日志写到 `.runtime/local-llm-service.log`
+
+### 本地日志按天滚动
+
+如果你使用 `deploy/scripts/local_service.sh` 在裸机后台运行，推荐启用 `logrotate`：
+
+```bash
+sudo cp deploy/logrotate/local-llm-service /etc/logrotate.d/local-llm-service
+sudo logrotate -d /etc/logrotate.d/local-llm-service
+sudo logrotate -f /etc/logrotate.d/local-llm-service
+```
+
+这份配置会：
+
+- 每日切割 `.runtime/local-llm-service.log`
+- 保留 30 份历史日志
+- 压缩旧日志
+- 使用 `copytruncate`，兼容当前 `nohup >> log` 的写法
 
 ### 5090 一键部署
 

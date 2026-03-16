@@ -37,10 +37,12 @@ load_env() {
 start_service() {
   mkdir -p "${RUNTIME_DIR}"
   load_env
+  export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 
   if is_running; then
     echo "Service is already running with PID $(cat "${PID_FILE}")."
     echo "Log file: ${LOG_FILE}"
+    echo "HF_ENDPOINT: ${HF_ENDPOINT}"
     return 0
   fi
 
@@ -54,6 +56,7 @@ start_service() {
     echo "Service started in background."
     echo "PID: ${pid}"
     echo "Port: ${check_port}"
+    echo "HF_ENDPOINT: ${HF_ENDPOINT}"
     echo "Log file: ${LOG_FILE}"
     return 0
   fi
