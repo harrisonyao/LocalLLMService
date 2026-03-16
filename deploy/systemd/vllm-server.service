@@ -1,0 +1,20 @@
+[Unit]
+Description=vLLM OpenAI-compatible server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/vllm-server
+EnvironmentFile=/opt/vllm-server/.env
+ExecStart=/opt/vllm-server/venv/bin/python /opt/vllm-server/server_launcher.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=120
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
