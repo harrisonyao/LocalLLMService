@@ -6,18 +6,36 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import uvloop
-from vllm.entrypoints.openai.api_server import run_server
-from vllm.entrypoints.openai.cli_args import (
-    make_arg_parser,
-    validate_parsed_serve_args,
-)
-from vllm.entrypoints.utils import cli_env_setup
-from vllm.utils.argparse_utils import FlexibleArgumentParser
-
-
 LOGGER = logging.getLogger("vllm_server.launcher")
 ENV_FILE = Path(__file__).with_name(".env")
+LEGACY_ENV_MAP = {
+    "VLLM_MODEL": "LLM_MODEL",
+    "VLLM_SERVED_MODEL_NAME": "LLM_SERVED_MODEL_NAME",
+    "VLLM_HOST": "LLM_HOST",
+    "VLLM_PORT": "LLM_PORT",
+    "VLLM_DTYPE": "LLM_DTYPE",
+    "VLLM_GPU_MEMORY_UTILIZATION": "LLM_GPU_MEMORY_UTILIZATION",
+    "VLLM_MAX_MODEL_LEN": "LLM_MAX_MODEL_LEN",
+    "VLLM_MAX_NUM_SEQS": "LLM_MAX_NUM_SEQS",
+    "VLLM_MAX_NUM_BATCHED_TOKENS": "LLM_MAX_NUM_BATCHED_TOKENS",
+    "VLLM_TENSOR_PARALLEL_SIZE": "LLM_TENSOR_PARALLEL_SIZE",
+    "VLLM_ENABLE_REQUEST_ID_HEADERS": "LLM_ENABLE_REQUEST_ID_HEADERS",
+    "VLLM_DISABLE_FASTAPI_DOCS": "LLM_DISABLE_FASTAPI_DOCS",
+    "VLLM_DISABLE_UVICORN_ACCESS_LOG": "LLM_DISABLE_UVICORN_ACCESS_LOG",
+    "VLLM_TRUST_REMOTE_CODE": "LLM_TRUST_REMOTE_CODE",
+    "VLLM_ENABLE_LOG_REQUESTS": "LLM_ENABLE_LOG_REQUESTS",
+    "VLLM_API_KEYS": "LLM_API_KEYS",
+    "VLLM_EXTRA_ARGS": "LLM_EXTRA_ARGS",
+    "VLLM_UVICORN_LOG_LEVEL": "LLM_UVICORN_LOG_LEVEL",
+    "VLLM_ROOT_PATH": "LLM_ROOT_PATH",
+    "VLLM_ALLOWED_ORIGINS": "LLM_ALLOWED_ORIGINS",
+    "VLLM_ALLOWED_METHODS": "LLM_ALLOWED_METHODS",
+    "VLLM_ALLOWED_HEADERS": "LLM_ALLOWED_HEADERS",
+    "VLLM_SSL_KEYFILE": "LLM_SSL_KEYFILE",
+    "VLLM_SSL_CERTFILE": "LLM_SSL_CERTFILE",
+    "VLLM_SSL_CA_CERTS": "LLM_SSL_CA_CERTS",
+    "VLLM_H11_MAX_HEADER_COUNT": "LLM_H11_MAX_HEADER_COUNT",
+}
 
 
 def env_flag(name: str, default: bool) -> bool:
@@ -50,6 +68,27 @@ def load_env_file(path: Path) -> None:
 load_env_file(ENV_FILE)
 
 
+def normalize_legacy_env_vars() -> None:
+    for legacy_name, new_name in LEGACY_ENV_MAP.items():
+        legacy_value = os.environ.get(legacy_name)
+        if legacy_value is not None and new_name not in os.environ:
+            os.environ[new_name] = legacy_value
+        os.environ.pop(legacy_name, None)
+
+
+normalize_legacy_env_vars()
+
+
+import uvloop
+from vllm.entrypoints.openai.api_server import run_server
+from vllm.entrypoints.openai.cli_args import (
+    make_arg_parser,
+    validate_parsed_serve_args,
+)
+from vllm.entrypoints.utils import cli_env_setup
+from vllm.utils.argparse_utils import FlexibleArgumentParser
+
+
 @dataclass
 class ServiceSettings:
     model: str = field(init=False)
@@ -80,40 +119,40 @@ class ServiceSettings:
     extra_args: list[str] = field(init=False)
 
     def __post_init__(self) -> None:
-        self.model = os.getenv("VLLM_MODEL", "Qwen/Qwen3-Coder-30B-A3B-Instruct")
-        self.served_model_name = os.getenv("VLLM_SERVED_MODEL_NAME", "qwen3-coder")
-        self.host = os.getenv("VLLM_HOST", "0.0.0.0")
-        self.port = int(os.getenv("VLLM_PORT", "8000"))
-        self.dtype = os.getenv("VLLM_DTYPE", "auto")
+        self.model = os.getenv("LLM_MODEL", "Qwen/Qwen3-Coder-30B-A3B-Instruct")
+        self.served_model_name = os.getenv("LLM_SERVED_MODEL_NAME", "qwen3-coder")
+        self.host = os.getenv("LLM_HOST", "0.0.0.0")
+        self.port = int(os.getenv("LLM_PORT", "8000"))
+        self.dtype = os.getenv("LLM_DTYPE", "auto")
         self.gpu_memory_utilization = float(
-            os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.92")
+            os.getenv("LLM_GPU_MEMORY_UTILIZATION", "0.92")
         )
-        self.max_model_len = os.getenv("VLLM_MAX_MODEL_LEN")
-        self.max_num_seqs = os.getenv("VLLM_MAX_NUM_SEQS", "16")
+        self.max_model_len = os.getenv("LLM_MAX_MODEL_LEN")
+        self.max_num_seqs = os.getenv("LLM_MAX_NUM_SEQS", "16")
         self.max_num_batched_tokens = os.getenv(
-            "VLLM_MAX_NUM_BATCHED_TOKENS", "16384"
+            "LLM_MAX_NUM_BATCHED_TOKENS", "16384"
         )
-        self.tensor_parallel_size = int(os.getenv("VLLM_TENSOR_PARALLEL_SIZE", "1"))
-        self.api_keys = env_list("VLLM_API_KEYS")
+        self.tensor_parallel_size = int(os.getenv("LLM_TENSOR_PARALLEL_SIZE", "1"))
+        self.api_keys = env_list("LLM_API_KEYS")
         self.disable_uvicorn_access_log = env_flag(
-            "VLLM_DISABLE_UVICORN_ACCESS_LOG", True
+            "LLM_DISABLE_UVICORN_ACCESS_LOG", True
         )
         self.enable_request_id_headers = env_flag(
-            "VLLM_ENABLE_REQUEST_ID_HEADERS", True
+            "LLM_ENABLE_REQUEST_ID_HEADERS", True
         )
-        self.disable_fastapi_docs = env_flag("VLLM_DISABLE_FASTAPI_DOCS", True)
-        self.trust_remote_code = env_flag("VLLM_TRUST_REMOTE_CODE", False)
-        self.enable_log_requests = env_flag("VLLM_ENABLE_LOG_REQUESTS", False)
-        self.uvicorn_log_level = os.getenv("VLLM_UVICORN_LOG_LEVEL", "info")
-        self.root_path = os.getenv("VLLM_ROOT_PATH")
-        self.allowed_origins = env_list("VLLM_ALLOWED_ORIGINS") or ["*"]
-        self.allowed_methods = env_list("VLLM_ALLOWED_METHODS") or ["*"]
-        self.allowed_headers = env_list("VLLM_ALLOWED_HEADERS") or ["*"]
-        self.ssl_keyfile = os.getenv("VLLM_SSL_KEYFILE")
-        self.ssl_certfile = os.getenv("VLLM_SSL_CERTFILE")
-        self.ssl_ca_certs = os.getenv("VLLM_SSL_CA_CERTS")
-        self.h11_max_header_count = int(os.getenv("VLLM_H11_MAX_HEADER_COUNT", "256"))
-        self.extra_args = shlex.split(os.getenv("VLLM_EXTRA_ARGS", ""))
+        self.disable_fastapi_docs = env_flag("LLM_DISABLE_FASTAPI_DOCS", True)
+        self.trust_remote_code = env_flag("LLM_TRUST_REMOTE_CODE", False)
+        self.enable_log_requests = env_flag("LLM_ENABLE_LOG_REQUESTS", False)
+        self.uvicorn_log_level = os.getenv("LLM_UVICORN_LOG_LEVEL", "info")
+        self.root_path = os.getenv("LLM_ROOT_PATH")
+        self.allowed_origins = env_list("LLM_ALLOWED_ORIGINS") or ["*"]
+        self.allowed_methods = env_list("LLM_ALLOWED_METHODS") or ["*"]
+        self.allowed_headers = env_list("LLM_ALLOWED_HEADERS") or ["*"]
+        self.ssl_keyfile = os.getenv("LLM_SSL_KEYFILE")
+        self.ssl_certfile = os.getenv("LLM_SSL_CERTFILE")
+        self.ssl_ca_certs = os.getenv("LLM_SSL_CA_CERTS")
+        self.h11_max_header_count = int(os.getenv("LLM_H11_MAX_HEADER_COUNT", "256"))
+        self.extra_args = shlex.split(os.getenv("LLM_EXTRA_ARGS", ""))
 
     def to_cli_args(self) -> list[str]:
         args = [

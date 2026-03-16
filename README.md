@@ -19,7 +19,13 @@
 - `Dockerfile`
 - `docker-compose.yml`
 - `deploy/scripts/bootstrap_5090.sh`
+- `deploy/scripts/local_service.sh`
 - `deploy/systemd/vllm-server.service`
+
+## 配置说明
+
+- 自定义服务参数统一使用 `LLM_*` 前缀，避免和 vLLM 官方 `VLLM_*` 环境变量命名空间冲突。
+- 启动器仍兼容旧的 `VLLM_*` 变量名；如果检测到旧名字，会在启动早期自动转换到 `LLM_*`。
 
 ## 运行方式
 
@@ -58,10 +64,26 @@ source venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
 cp src/.env.example src/.env
-set -a && source src/.env && set +a
 python src/server_launcher.py --check-config
 python src/server_launcher.py
 ```
+
+### 本地后台启动
+
+如果你不想前台占住终端，可以使用：
+
+```bash
+bash deploy/scripts/local_service.sh start
+bash deploy/scripts/local_service.sh status
+bash deploy/scripts/local_service.sh stop
+```
+
+脚本会：
+
+- 自动读取 `src/.env`
+- 默认使用 `venv/bin/python`，如果不存在则回退到 `python3`
+- 把 PID 文件写到 `.runtime/local-llm-service.pid`
+- 把日志写到 `.runtime/local-llm-service.log`
 
 ### 5090 一键部署
 
@@ -107,7 +129,7 @@ sudo REPO_URL=https://github.com/harrisonyao/LocalLLMService.git APP_DIR=/opt/Lo
 如果设置：
 
 ```bash
-VLLM_API_KEYS=key1,key2
+LLM_API_KEYS=key1,key2
 ```
 
 则 `/v1/*` 请求需要携带：
@@ -122,7 +144,7 @@ Authorization: Bearer <key>
 
 - 代码骨架同时兼容 4090 和 5090。
 - `Qwen/Qwen3-Coder-30B-A3B-Instruct` 更适合 5090。
-- 4090 24GB 场景请优先替换为量化版模型或更小模型，并降低 `VLLM_MAX_MODEL_LEN`、`VLLM_MAX_NUM_SEQS`。
+- 4090 24GB 场景请优先替换为量化版模型或更小模型，并降低 `LLM_MAX_MODEL_LEN`、`LLM_MAX_NUM_SEQS`。
 - 不要把 macOS 本地环境直接迁移到 Linux GPU 机；请在目标机重新构建镜像或重新安装依赖。
 
 ## 客户端示例

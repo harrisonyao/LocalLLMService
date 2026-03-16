@@ -8,7 +8,7 @@ services:
     env_file:
       - src/.env
     ports:
-      - "${VLLM_PORT:-8000}:8000"
+      - "${LLM_PORT:-8000}:8000"
     volumes:
       - ${HF_HOME:-./.cache/huggingface}:/root/.cache/huggingface
     restart: unless-stopped
