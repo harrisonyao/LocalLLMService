@@ -119,11 +119,13 @@ class ServiceSettings:
     extra_args: list[str] = field(init=False)
 
     def __post_init__(self) -> None:
-        self.model = os.getenv("LLM_MODEL", "Qwen/Qwen3-Coder-30B-A3B-Instruct")
+        self.model = os.getenv(
+            "LLM_MODEL", "cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit"
+        )
         self.served_model_name = os.getenv("LLM_SERVED_MODEL_NAME", "qwen3-coder")
         self.host = os.getenv("LLM_HOST", "0.0.0.0")
         self.port = int(os.getenv("LLM_PORT", "8000"))
-        self.dtype = os.getenv("LLM_DTYPE", "auto")
+        self.dtype = os.getenv("LLM_DTYPE", "float16")
         self.gpu_memory_utilization = float(
             os.getenv("LLM_GPU_MEMORY_UTILIZATION", "0.92")
         )

@@ -1,6 +1,6 @@
 # LocalLLMService
 
-适用于内部代码模型服务的 vLLM 生产骨架，当前默认目标模型为 `Qwen/Qwen3-Coder-30B-A3B-Instruct`。
+适用于内部代码模型服务的 vLLM 生产骨架，当前默认目标模型为 `cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit`。
 
 ## 目录结构
 
@@ -143,8 +143,8 @@ Authorization: Bearer <key>
 ## 4090 与 5090
 
 - 代码骨架同时兼容 4090 和 5090。
-- `Qwen/Qwen3-Coder-30B-A3B-Instruct` 更适合 5090。
-- 4090 24GB 场景请优先替换为量化版模型或更小模型，并降低 `LLM_MAX_MODEL_LEN`、`LLM_MAX_NUM_SEQS`。
+- `cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit` 作为 4bit AWQ 量化版，更适合单卡 4090/5090 部署，默认建议 `LLM_DTYPE=float16`。
+- 4090 24GB 场景建议保持更保守的 `LLM_MAX_MODEL_LEN`、`LLM_MAX_NUM_SEQS` 和 `LLM_MAX_NUM_BATCHED_TOKENS`。
 - 不要把 macOS 本地环境直接迁移到 Linux GPU 机；请在目标机重新构建镜像或重新安装依赖。
 
 ## 客户端示例
